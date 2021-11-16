@@ -26,7 +26,7 @@ clean:
 	@rm -fr TaxiFareModel.egg-info
 
 install:
-	@pip install . -U
+	@pip install -e . -U
 
 all: clean install test black check_code
 
