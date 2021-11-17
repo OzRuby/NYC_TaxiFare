@@ -1,6 +1,6 @@
 from sklearn.base import BaseEstimator, TransformerMixin
 import pandas as pd
-from TaxiFareModel.utils import haversine_vectorized
+from TaxiFareModel.utils import haversine_vectorized , minkowski_distance_gps
 
 
 class TimeFeaturesEncoder(BaseEstimator, TransformerMixin):
@@ -33,6 +33,7 @@ class DistanceTransformer(BaseEstimator, TransformerMixin):
         Returns a copy of the DataFrame X with only one column: 'distance'.
     """
     def __init__(self,
+                 distance_type="haversine",
                  start_lat="pickup_latitude",
                  start_lon="pickup_longitude",
                  end_lat="dropoff_latitude",
@@ -41,6 +42,7 @@ class DistanceTransformer(BaseEstimator, TransformerMixin):
         self.start_lon = start_lon
         self.end_lat = end_lat
         self.end_lon = end_lon
+        self.distance_type = distance_type
 
     def fit(self, X, y=None):
         return self
@@ -48,9 +50,21 @@ class DistanceTransformer(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         assert isinstance(X, pd.DataFrame)
         X_ = X.copy()
-        X_["distance"] = haversine_vectorized(X_,
-                                              start_lat=self.start_lat,
-                                              start_lon=self.start_lon,
-                                              end_lat=self.end_lat,
-                                              end_lon=self.end_lon)
-        return X_[['distance']]
+        if self.distance_type == "manhattan" :
+            X_['manhattan_dist'] = minkowski_distance_gps(
+                X_,
+                1,
+                start_lat=self.start_lat,
+                start_lon=self.start_lon,
+                end_lat=self.end_lat,
+                end_lon=self.end_lon)
+            return X_[['manhattan_dist']]
+            # X_["distance"] = 1
+            # return X_[["distance"]]
+        elif self.distance_type == "haversine" :
+            X_['hav_distance'] = haversine_vectorized(X_,
+                                                      start_lat=self.start_lat,
+                                                      start_lon=self.start_lon,
+                                                      end_lat=self.end_lat,
+                                                      end_lon=self.end_lon)
+            return X_[['hav_distance']]

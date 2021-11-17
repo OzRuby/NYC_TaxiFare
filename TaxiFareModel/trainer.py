@@ -7,8 +7,21 @@ from sklearn.linear_model import LassoCV
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from TaxiFareModel.data import clean_data, get_data
+import mlflow
+from mlflow.tracking import MlflowClient
+from memoized_property import memoized_property
+import joblib
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
+import os
+
+
+
 
 class Trainer():
+
+    MLFLOW_URI = "https://mlflow.lewagon.co/"
+    experiment_name = "[FR] [PARIS] [IDI] test_experiment"
+
     def __init__(self, X, y):
         """
             X: pandas DataFrame
@@ -18,12 +31,14 @@ class Trainer():
         self.X = X
         self.y = y
 
-    def set_pipeline(self):
+    def set_pipeline(self, model):
         """defines the pipeline as a class attribute"""
         '''returns a pipelined model'''
 
-        dist_pipe = Pipeline([('dist_trans', DistanceTransformer()),
-                          ('stdscaler', StandardScaler())])
+        dist_pipe = Pipeline([
+            ('dist_trans', DistanceTransformer()),
+            ('stdscaler', StandardScaler())
+        ])
 
         time_pipe = Pipeline([
         ('time_enc', TimeFeaturesEncoder('pickup_datetime')),
@@ -34,10 +49,10 @@ class Trainer():
             "pickup_latitude", "pickup_longitude", 'dropoff_latitude',
             'dropoff_longitude'
         ]), ('time', time_pipe, ['pickup_datetime'])],
-                                         remainder="drop")
+                                         remainder="drop", n_jobs=-1)
 
         pipe = Pipeline([('preproc', preproc_pipe),
-                         ('linear_model', LassoCV(cv=5, n_alphas=5))])
+                         model])
 
         self.pipeline = pipe
         return self
@@ -53,21 +68,64 @@ class Trainer():
         y_pred = self.pipeline.predict(X_test)
         return compute_rmse(y_test, y_pred)
 
-if __name__ == "__main__":
+    def save_model(self, name):
+        """ Save the trained model into a model.joblib file """
+        if not os.path.exists("models"):
+            os.mkdir("models")
+        joblib.dump(self.pipeline, os.path.join("models",name))
 
-    df = pd.read_csv("raw_data/train_1k.csv")
+    @memoized_property
+    def mlflow_client(self):
+        mlflow.set_tracking_uri(self.MLFLOW_URI)
+        return MlflowClient()
+
+    @memoized_property
+    def mlflow_experiment_id(self):
+        try:
+            return self.mlflow_client.create_experiment(self.experiment_name)
+        except BaseException:
+            return self.mlflow_client.get_experiment_by_name(self.experiment_name).experiment_id
+
+    @memoized_property
+    def mlflow_run(self):
+        return self.mlflow_client.create_run(self.mlflow_experiment_id)
+
+    def mlflow_log_param(self, key, value):
+        self.mlflow_client.log_param(self.mlflow_run.info.run_id, key, value)
+
+    def mlflow_log_metric(self, key, value):
+        self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
+
+if __name__ == "__main__":
+    models = dict(
+        { "Lasso" : LassoCV(cv=5, n_alphas=5),
+        "Random Forest" : RandomForestRegressor(),
+            }
+        )
+
+    distances = ["manhattan", "haversine"]
+
+    df = pd.read_csv("raw_data/train_10k.csv")
     df = clean_data(df)
+    # df = clean_data(get_data())
     y = df.pop("fare_amount")
+
     X = df
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    trainer = Trainer(X_train, y_train)
-    trainer.set_pipeline()
-    trainer.run()
-    rmse = trainer.evaluate(X_test, y_test)
-    print(f"LassoCV model gives an rmse of {rmse}")
-    # get data
-    # clean data
-    # set X and y
-    # hold out
-    # train
-    # evaluate
+
+
+    for model in models.items():
+        for dist in distances:
+            trainer = Trainer(X_train, y_train)
+            trainer.set_pipeline(model)
+            trainer.pipeline.set_params(
+                **{"preproc__distance__dist_trans__distance_type" :dist})
+            trainer.run()
+            rmse = trainer.evaluate(X_test, y_test)
+            print(f"{model[0]} model with the {dist} distance used gives an rmse of {rmse}")
+
+            trainer.mlflow_log_param(model[0], model[1])
+            trainer.mlflow_log_param("distance", dist)
+            trainer.mlflow_log_metric("rmse", rmse)
+            trainer.save_model(model[0])

@@ -4,6 +4,11 @@
 install_requirements:
 	@pip install -r requirements.txt
 
+
+
+trainer:
+	@ python -m TaxiFareModel.trainer
+
 check_code:
 	@flake8 scripts/* TaxiFareModel/*.py
 
@@ -23,7 +28,9 @@ clean:
 	@rm -fr */__pycache__ */*.pyc __pycache__
 	@rm -fr build dist
 	@rm -fr TaxiFareModel-*.dist-info
+	@rm -fr TaxiFareModel/__pycache__*
 	@rm -fr TaxiFareModel.egg-info
+	@rm -fr mlruns
 
 install:
 	@pip install -e . -U
