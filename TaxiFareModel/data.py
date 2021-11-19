@@ -1,7 +1,17 @@
 import pandas as pd
+import os
+
+
+
+
+BUCKET_NAME="wagon-data-722-idi"
+
+BUCKET_FOLDER ="data"
+
+BUCKET_FILE_NAME="train_10k.csv"
 
 AWS_BUCKET_PATH = "s3://wagon-public-datasets/taxi-fare-train.csv"
-GCP_BUCKET_PATH = "gs://le-wagon-batch-722 /train_10k.csv"
+GCP_BUCKET_PATH = f"gs://{BUCKET_NAME}/{BUCKET_FOLDER}/{BUCKET_FILE_NAME}"
 
 
 def get_data(nrows=10_000):

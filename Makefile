@@ -60,3 +60,57 @@ pypi_test:
 
 pypi:
 	@twine upload dist/* -u $(PYPI_USERNAME)
+
+
+
+# --------------------------------
+
+#				UPLOAD DATA TO GCP
+
+# -----------------------------------
+
+PROJECT_ID=le-wagon-batch-722
+BUCKET_NAME=wagon-data-722-idi
+REGION=europe-west2
+
+
+LOCAL_PATH="raw_data/train_10k.csv"
+LOCAL_PATH_2="raw_data/train.csv"
+
+BUCKET_FOLDER ="data"
+
+BUCKET_FILE_NAME=$(shell basename ${LOCAL_PATH})
+BUCKET_FILE_NAME_2=$(shell basename ${LOCAL_PATH_2})
+
+set_project:
+	@gcloud config set project ${PROJECT_ID}
+
+create_bucket:
+	@gsutil mb -l ${REGION} -p ${PROJECT_ID} gs://${BUCKET_NAME}
+
+upload_data:
+	@gsutil cp ${LOCAL_PATH_2} gs://${BUCKET_NAME}/${BUCKET_FOLDER}/${BUCKET_FILE_NAME_2}
+
+
+
+PYTHON_VERSION=3.7
+FRAMEWORK=scikit-learn
+RUNTIME_VERSION=1.15
+
+PACKAGE_NAME=TaxiFareModel
+FILENAME=trainer
+
+# will store the packages uploaded to GCP for the training
+BUCKET_TRAINING_FOLDER = 'trainings'
+
+JOB_NAME=taxi_fare_training_pipeline_$(shell date +'%Y%m%d_%H%M%S')
+
+gcp_submit_training:
+	@gcloud ai-platform jobs submit training ${JOB_NAME} \
+		--job-dir gs://${BUCKET_NAME}/${BUCKET_TRAINING_FOLDER} \
+		--package-path ${PACKAGE_NAME} \
+		--module-name ${PACKAGE_NAME}.${FILENAME} \
+		--python-version=${PYTHON_VERSION} \
+		--runtime-version=${RUNTIME_VERSION} \
+		--region ${REGION} \
+		--stream-logs

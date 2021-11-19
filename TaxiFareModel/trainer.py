@@ -6,14 +6,14 @@ from sklearn.compose import ColumnTransformer
 from sklearn.linear_model import LassoCV
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from TaxiFareModel.data import clean_data, get_data
+from TaxiFareModel.data import clean_data, get_data, dl_data
 import mlflow
 from mlflow.tracking import MlflowClient
 from memoized_property import memoized_property
 import joblib
 from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor
 import os
-
+from google.cloud import storage
 
 
 
@@ -68,11 +68,26 @@ class Trainer():
         y_pred = self.pipeline.predict(X_test)
         return compute_rmse(y_test, y_pred)
 
+
+
+
+    def upload_model_to_gcp(self, bucket_name, storage_loc, filename):
+
+        client = storage.Client()
+
+        bucket = client.bucket(bucket_name)
+
+        blob = bucket.blob(storage_loc)
+
+        blob.upload_from_filename(filename)
+
+
     def save_model(self, name):
         """ Save the trained model into a model.joblib file """
         if not os.path.exists("models"):
             os.mkdir("models")
-        joblib.dump(self.pipeline, os.path.join("models",name))
+        joblib.dump(self.pipeline, os.path.join("models", name))
+
 
     @memoized_property
     def mlflow_client(self):
@@ -97,6 +112,14 @@ class Trainer():
         self.mlflow_client.log_metric(self.mlflow_run.info.run_id, key, value)
 
 if __name__ == "__main__":
+
+
+    BUCKET_NAME="wagon-data-722-idi"
+
+    BUCKET_MODEL_FOLDER = "models" + "/Random_Forest"
+
+    BUCKET_FILE_NAME="train_10k.csv"
+
     models = dict(
         { "Lasso" : LassoCV(cv=5, n_alphas=5),
         "Random Forest" : RandomForestRegressor(),
@@ -105,9 +128,10 @@ if __name__ == "__main__":
 
     distances = ["manhattan", "haversine"]
 
-    df = pd.read_csv("raw_data/train_10k.csv")
-    df = clean_data(df)
-    # df = clean_data(get_data())
+    #df = pd.read_csv("raw_data/train_10k.csv")
+    #df = clean_data(df)
+
+    df = clean_data(dl_data())
     y = df.pop("fare_amount")
 
     X = df
@@ -115,17 +139,43 @@ if __name__ == "__main__":
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 
-    for model in models.items():
-        for dist in distances:
-            trainer = Trainer(X_train, y_train)
-            trainer.set_pipeline(model)
-            trainer.pipeline.set_params(
-                **{"preproc__distance__dist_trans__distance_type" :dist})
-            trainer.run()
-            rmse = trainer.evaluate(X_test, y_test)
-            print(f"{model[0]} model with the {dist} distance used gives an rmse of {rmse}")
+    trainer = Trainer(X_train, y_train)
+    trainer.set_pipeline(("Random Forest" , RandomForestRegressor()))
+    trainer.pipeline.set_params(
+        **{"preproc__distance__dist_trans__distance_type": "haversine"})
+    trainer.run()
+    rmse = trainer.evaluate(X_test, y_test)
+    print(f"Lasso model with the haversine distance used gives an rmse of {rmse}")
 
-            trainer.mlflow_log_param(model[0], model[1])
-            trainer.mlflow_log_param("distance", dist)
-            trainer.mlflow_log_metric("rmse", rmse)
-            trainer.save_model(model[0])
+    # trainer.mlflow_log_param(model[0], model[1])
+    # trainer.mlflow_log_param("distance", dist)
+    # trainer.mlflow_log_metric("rmse", rmse)
+    trainer.save_model("Random_Forest")
+    trainer.upload_model_to_gcp(BUCKET_NAME, BUCKET_MODEL_FOLDER,
+                                os.path.join("models", "Random_Forest"))
+
+
+
+
+
+
+
+
+
+
+    # for model in models.items():
+    #     for dist in distances:
+    #         trainer = Trainer(X_train, y_train)
+    #         trainer.set_pipeline(model)
+    #         trainer.pipeline.set_params(
+    #             **{"preproc__distance__dist_trans__distance_type" :dist})
+    #         trainer.run()
+    #         rmse = trainer.evaluate(X_test, y_test)
+    #         print(f"{model[0]} model with the {dist} distance used gives an rmse of {rmse}")
+
+    #         trainer.mlflow_log_param(model[0], model[1])
+    #         trainer.mlflow_log_param("distance", dist)
+    #         trainer.mlflow_log_metric("rmse", rmse)
+    #         trainer.save_model(model[0])
+    #         trainer.upload_model_to_gcp(BUCKET_NAME, BUCKET_MODEL_FOLDER,
+    #                                     model[0])
