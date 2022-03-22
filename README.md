@@ -1,4 +1,9 @@
-# Data analysis
+
+
+![](images/snapshot.png)
+
+# NY Taxi Fare prediction
+
 This project aims to predict the price of a taxi ride in New York.
 The dataset comes from Kaggle
 Features like the distance and the time of the day are engineered.
