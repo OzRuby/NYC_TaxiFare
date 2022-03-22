@@ -20,7 +20,7 @@ def get_data(nrows=10_000):
     return df
 
 def dl_data(nrows=10_000):
-    '''returns a DataFrame with nrows from s3 bucket'''
+    '''returns a DataFrame with nrows from my gcp bucket'''
     df = pd.read_csv(GCP_BUCKET_PATH, nrows=nrows)
     return df
 

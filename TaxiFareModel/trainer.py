@@ -16,7 +16,9 @@ import os
 from google.cloud import storage
 
 
-
+""" Class that is used to train the model,
+    return an rmse and push the results of the trials
+    to mlflow """
 class Trainer():
 
     MLFLOW_URI = "https://mlflow.lewagon.co/"
@@ -66,7 +68,7 @@ class Trainer():
     def evaluate(self, X_test, y_test):
         """evaluates the pipeline on df_test and return the RMSE"""
         y_pred = self.pipeline.predict(X_test)
-        return compute_rmse(y_test, y_pred)
+        return round(compute_rmse(y_test, y_pred),2)
 
 
 
@@ -131,7 +133,7 @@ if __name__ == "__main__":
     #df = pd.read_csv("raw_data/train_10k.csv")
     #df = clean_data(df)
 
-    df = clean_data(dl_data())
+    df = clean_data(get_data())
     y = df.pop("fare_amount")
 
     X = df
@@ -145,14 +147,14 @@ if __name__ == "__main__":
         **{"preproc__distance__dist_trans__distance_type": "haversine"})
     trainer.run()
     rmse = trainer.evaluate(X_test, y_test)
-    print(f"Lasso model with the haversine distance used gives an rmse of {rmse}")
+    print(f"RandomForestRegressor model with the haversine distance used gives an rmse of {rmse}")
 
     # trainer.mlflow_log_param(model[0], model[1])
     # trainer.mlflow_log_param("distance", dist)
     # trainer.mlflow_log_metric("rmse", rmse)
-    trainer.save_model("Random_Forest")
-    trainer.upload_model_to_gcp(BUCKET_NAME, BUCKET_MODEL_FOLDER,
-                                os.path.join("models", "Random_Forest"))
+    #trainer.save_model("Random_Forest")
+    """ trainer.upload_model_to_gcp(BUCKET_NAME, BUCKET_MODEL_FOLDER,
+                                os.path.join("models", "Random_Forest")) """
 
 
 
